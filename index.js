@@ -109,22 +109,27 @@ router.route('/comics')
 		if(req.query.author){
 			query.authors = req.query.author;
 		}
-		var paginate = {sort:{updateTime:-1}};		
+        if(req.query.search){
+            query.title = new RegExp(req.query.search,'i');
+        }
+		var paginate = {};		
 		if(req.query.page){
 			paginate.page=req.query.page;					
 		} else{
             paginate.page=1;
         }
-        paginate.limit = 10;
+        paginate.limit = 20;
 
-		Comic.paginate(query,{select:"-chapters.urls", page:paginate.page, limit: paginate.limit, lean: true}, function(err,result){
+		Comic.paginate(query,{select:"-chapters.urls", page:paginate.page,sort:{updateTime: -1}, limit: paginate.limit, lean: true}, function(err,result){
 			if(!err){
                 result.docs.forEach(function(item){
                     if(item.chapters)                    
-                        item.lastestChapter = item.chapters.last()?item.chapters.last().title:"";
+                        item.latestChapter = item.chapters.last()?item.chapters.last().title:"";
                     delete item.chapters;
                 });
 			}
+            res.set("Cache-Control", "public, max-age=3600");
+            res.set("Expires", new Date(Date.now() + 3600).toUTCString()); 
             sendResult(res,err,result.docs);
 		});
 	})
@@ -138,7 +143,9 @@ router.route('/comics')
 router.route('/comics/:id')
     //get comic with id 
     .get(function(req,res){
-        Comic.findById(req.params.id, "-chapters.urls").exec(function(err,comic){        
+        Comic.findById(req.params.id, "-chapters.urls").exec(function(err,comic){       
+            res.set("Cache-Control", "public, max-age=3600");
+            res.set("Expires", new Date(Date.now() + 3600).toUTCString());  
             sendResult(res,err,comic);
         });
 
@@ -173,11 +180,12 @@ router.route('/comics/:id/:chapter')
             {$unwind:"$chapters"},
             {$match:{'chapters.title': req.params.chapter}},
             {$project: {"chapters":1, _id: 0}},
-        function(err, comic){            
+        function(err, comic){
+            res.set("Cache-Control", "public, max-age=2592000");
+            res.set("Expires", new Date(Date.now() + 2592000000).toUTCString()); 
             sendResult(res,err,comic[0]?comic[0].chapters:comic[0]);
         })
 	});
-
 
 app.use('/api', router);
 
