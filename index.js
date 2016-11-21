@@ -126,6 +126,10 @@ router.route('/comics')
                     if(item.chapters)                    
                         item.latestChapter = item.chapters.last()?item.chapters.last().title:"";
                     delete item.chapters;
+                    if(req.query.realm){
+                        item.authors = item.authors.join("<|>");
+                        item.categories = item.categories.join("<|>");
+                    }
                 });
 			}
             res.set("Cache-Control", "public, max-age=3600");
@@ -143,10 +147,14 @@ router.route('/comics')
 router.route('/comics/:id')
     //get comic with id 
     .get(function(req,res){
-        Comic.findById(req.params.id, "-chapters.urls").exec(function(err,comic){       
+        Comic.findById(req.params.id, "-chapters.urls").lean().exec(function(err,comic){       
             res.set("Cache-Control", "public, max-age=3600");
-            res.set("Expires", new Date(Date.now() + 3600).toUTCString());  
-            sendResult(res,err,comic);
+            res.set("Expires", new Date(Date.now() + 3600).toUTCString());
+	    if(req.query.realm){
+ 	 	comic.authors = comic.authors.join("<|>");
+                comic.categories = comic.categories.join("<|>");
+ 	    }
+	    sendResult(res,err,comic);
         });
 
     })
@@ -179,12 +187,16 @@ router.route('/comics/:id/:chapter')
             {$match:{_id: new ObjectId(req.params.id)}},
             {$unwind:"$chapters"},
             {$match:{'chapters.title': req.params.chapter}},
-            {$project: {"chapters":1, _id: 0}},
+            {$project: {"chapters":1, _id: 0}}).exec(
         function(err, comic){
             res.set("Cache-Control", "public, max-age=2592000");
             res.set("Expires", new Date(Date.now() + 2592000000).toUTCString()); 
-            sendResult(res,err,comic[0]?comic[0].chapters:comic[0]);
-        })
+            var result = comic[0]?comic[0].chapters:comic[0];
+            if(result.urls && req.query.realm){
+                result.urls = result.urls.join("<!>");
+            }
+            sendResult(res,err,result);
+        });
 	});
 
 app.use('/api', router);
